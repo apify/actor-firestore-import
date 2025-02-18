@@ -1,0 +1,13 @@
+{
+	"actorSpecification": 1,
+	"name": "firestore-import",
+	"title": "Firestore Import",
+	"description": "Actor for importing data to Firestore",
+	"version": "1.0",
+	"buildTag": "latest",
+	"meta": {
+		"templateId": "ts-empty"
+	},
+    "input": "./input_schema.json",
+	"dockerfile": "./Dockerfile"
+}

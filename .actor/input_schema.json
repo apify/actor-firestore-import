@@ -1,0 +1,58 @@
+{
+    "title": "Firestore Import",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "serviceAccountKey": {
+            "title": "Service Account Key",
+            "type": "string",
+            "description": "Service account key in JSON format. You can get it from Firebase Console -> Project Settings -> Service accounts -> Generate new private key.",
+            "editor": "textarea",
+            "isSecret": true
+        },
+        "datasetId": {
+            "title": "Dataset ID",
+            "type": "string",
+            "description": "ID of the dataset to import data from.",
+            "resourceType": "dataset",
+            "editor": "resourcePicker"
+        },
+        "collection": {
+            "title": "Collection",
+            "type": "string",
+            "description": "Firestore collection to import data to. If it doesn't exist, it will be created. Note: you can customize the collection for each record using the `transformFunction` input.",
+            "editor": "textfield"
+        },
+        "documentConflictResolution": {
+            "title": "Document Conflict Resolution",
+            "type": "string",
+            "description": "How to handle conflicts when importing data to Firestore:\n- *overwrite*: replace existing documents with the same ID.\n- *merge*: merge data from the dataset with existing documents.\n- *skip*: skip records with existing IDs.",
+            "editor": "select",
+            "default": "overwrite",
+            "prefill": "overwrite",
+            "enum": ["overwrite", "merge", "skip"],
+            "enumTitles": ["Overwrite", "Merge", "Skip"],
+            "sectionCaption": "Advanced configuration"
+        },
+        "idField": {
+            "title": "ID Field",
+            "type": "string",
+            "description": "Field in the dataset that will be used as a document ID in Firestore. If not provided, Firestore will generate a random ID for each document. This is useful when you want to update existing documents in Firestore. Note: you can customize the ID for each record using the `transformFunction` input.",
+            "editor": "textfield"
+        },
+        "transformFunction": {
+            "title": "Transform Function",
+            "type": "string",
+            "description": "Function that transforms each record from the dataset before importing it to Firestore. The function must return an object (or array of objects) with the `data` key that contains the transformed record and other optional fields. See documentation for more details and examples.",
+            "editor": "javascript",
+            "prefill": "(data) => {\n    return { data };\n}",
+            "default": "(data) => {\n    return { data };\n}"
+        }
+    },
+    "required": [
+        "serviceAccountKey",
+        "collection",
+        "datasetId",
+        "documentConflictResolution"
+    ]
+}
