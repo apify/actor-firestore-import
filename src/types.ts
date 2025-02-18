@@ -19,10 +19,13 @@ export type FirestoreImportOptions = Omit<FirestoreImportInput, 'serviceAccountK
 }
 
 export type TransformFunctionResult = {
-    data: object;
+    data: Record<string, unknown>;
     id: string | undefined | null;
     collection: string | undefined | null;
     documentConflictResolution: keyof typeof DOCUMENT_CONFLICT_RESOLUTION | undefined | null;
 }
 
-export type TransformFunction = (doc: object) => TransformFunctionResult | TransformFunctionResult[];
+export type TransformFunction = (doc: object) =>
+    Promise<TransformFunctionResult | TransformFunctionResult[]> |
+    TransformFunctionResult |
+    TransformFunctionResult[];

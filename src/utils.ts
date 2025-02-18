@@ -5,7 +5,7 @@ import {
     DOCUMENT_CONFLICT_RESOLUTION,
     FirestoreImportInput,
     FirestoreImportOptions,
-    TransformFunction,
+    TransformFunction, TransformFunctionResult,
 } from './types.js';
 
 /**
@@ -48,4 +48,17 @@ async function parseTransformFunction(transformFunction: string | undefined): Pr
     const fn = new Function(`return ${transformFunction}`)();
     if (typeof fn !== 'function') throw new Error('Transform function is not a function');
     return fn as TransformFunction;
+}
+
+export async function transformDatasetItem(item: Record<string, unknown>, transformFunction: TransformFunction | null): Promise<TransformFunctionResult[]> {
+    if (!transformFunction) {
+        return [{
+            data: item,
+            id: null,
+            collection: null,
+            documentConflictResolution: null,
+        }];
+    }
+    const result = await transformFunction(item);
+    return Array.isArray(result) ? result : [result];
 }
