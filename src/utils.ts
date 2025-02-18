@@ -22,10 +22,11 @@ export async function parseInput(input: FirestoreImportInput | null): Promise<Fi
             throw new Error('Invalid documentConflictResolution');
         }
 
+        const serviceAccount = JSON.parse(input.serviceAccountKey);
         const transformFunction = await parseTransformFunction(input.transformFunction);
 
         return {
-            serviceAccountKey: input.serviceAccountKey,
+            serviceAccount,
             datasetId: input.datasetId,
             collection: input.collection,
             documentConflictResolution: input.documentConflictResolution,

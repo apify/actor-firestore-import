@@ -13,7 +13,8 @@ export type FirestoreImportInput = {
     transformFunction?: string;
 };
 
-export type FirestoreImportOptions = Omit<FirestoreImportInput, 'transformFunction'> & {
+export type FirestoreImportOptions = Omit<FirestoreImportInput, 'serviceAccountKey' | 'transformFunction'> & {
+    serviceAccount: object;
     transformFunction: TransformFunction | null;
 }
 
