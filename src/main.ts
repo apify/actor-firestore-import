@@ -7,15 +7,16 @@ import { IMPORT_BATCH_SIZE } from './consts.js';
 
 await Actor.init();
 
+// Read, parse and validate input
 const input = await Actor.getInput<FirestoreImportInput>();
 const options = await parseInput(input);
 
+// Initialize Firebase app using service account key
 initializeApp({
     credential: cert(options.serviceAccount),
 });
 
-// TODO - import documents in loop with transform function
-
+// Open dataset and get its info
 const dataset = await Actor.openDataset(options.datasetId);
 const datasetInfo = await dataset.getInfo();
 
