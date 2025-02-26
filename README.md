@@ -1,99 +1,178 @@
-## Firestore import integration Actor
+# Firestore Import Integration
 
-TODO: write proper description
+The Firestore Import is Apify integration [Actor](https://docs.apify.com/platform/actors#what-is-an-actor) that import data into [Firebase Firestore](https://firebase.google.com/docs/firestore)
+(NoSQL cloud database build on Google Cloud infrastructure) from [Apify dataset](https://docs.apify.com/platform/storage/dataset).
+It allows you to configure various options, such as the target collection, handling conflicts in data,
+and transforming the dataset item before importing it into Firestore.
 
-# Firebase Firestore Integration Specification
+## Features
+The Firestore Import Actor takes a dataset, applies transformations, and imports the data into a Firestore database.
+This Actor is highly customizable, you can control how the data are imported such as:
+- Selecting Firestore database and collection.
+- Automatically generating document IDs or using a field from the dataset for the document ID.
+- Handling document conflicts by either overwriting, merging, or skipping documents with existing ID.
+- Transforming data before it gets imported using a customizable JavaScript function.
+- One dataset item can lead to multiple Firestore inserts/updates.
+- Each document can have its own configuration, such as a custom collection or document ID.
 
-As stated here https://github.com/apify/apify-core/issues/19078 this should go beyond the features of [drobnikj/firestore-import](https://console.apify.com/actors/tHbtPTjFCTukBZvcH/information/latest/readme) and [danielwebr/firebase-firestore-import](https://console.apify.com/actors/kRu4T4OEFQmTRRTJ0/information/latest/readme)
+## Input
 
-It would be Actor to Actor Integration, that on would accept on input:
-- **Service Account Key** (`serviceAccountKey`) - `{"type": "string", "isSecret": true}` - accepts Service Account Key in JSON format generated from Firebase Console *Project Settings* -> *Service Accounts* -> *Generate new private key*
-- **Dataset** (`datasetId`) - `{"type": "string", "resourceType": "dataset"}` - id of dataset to import data from
-- **Collection** (`collection`) - `{"type": "string"}` - collection name in Firestore to import data to
-- **Custom Field ID** (`customFieldId`, `optional`) - `{"type": "string"}` - field name from dataset that should be used as Firestore document ID. Must be string and should be unique. If not provided Firestore will generate one automatically.
-- **Document Conflict Resolution** (`documentConflictResolution`, `default: "overwrite"`) - {"type": "string", "enum": ["overwrite", "merge", "skip"] - controlling behavior when a document already exists in Firestore. Only useful when `customFieldId` is provided.
-- **Transform function** (`transformFunction`, `optional`) - `{"type": "string", "editor": "javascript"}` - custom transform function which accept one dataset item as parameter and returns data to insert/update to document in Firestore with more features:
-    - Dot notation to update nested objects
-    - Add elements to array `arrayUnion`
-    - increment numeric value - `FieldValue.increment`
-    - data types
-    - subcollections
+The actor requires several input fields to work correctly. Below is a detailed description of each input field:
 
-It should support all these types of transform functions:
-1. Simple
-```
-(data) => {
-  data.newField = data.oldField + 1;
-  delete data.unused
-  return data;
+| **Field Name**               | **Type**                                          | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+|------------------------------|---------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `serviceAccountKey`          | `string` (secret, *required*)                     | Service account key in JSON format.<br/>You can get it from *Firebase Console* -> *Project Settings* -> *Service accounts* -> *Generate new private key*.<br/><br/>Paste the whole JSON string here, don't worry this is [secret input](https://docs.apify.com/platform/actors/development/actor-definition/input-schema/secret-input) which store the value in encrypted form.                                                                                                          |
+| `datasetId`                  | `string` (*required*)                             | ID of the Apify dataset to import data from.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `collection`                 | `string` (*required*)                             | Firestore collection to import data to. If it doesn't exist, it will be created.<br/><br/>*Note:* you can customize the collection for each record by using the `transformFunction` input. This can be useful when you want to import data to sub-collections.                                                                                                                                                                                                                           |
+| `databaseName`               | `string` (*optional*)                             | Name of the Firestore database.<br/>If not provided, the default database (`"(default)"`) will be used.                                                                                                                                                                                                                                                                                                                                                                                  |
+| `idField`                    | `string` (*optional*)                             | Field in the dataset item that will be used as a Firestore document ID. It must be `string` or `number`.<br/>If not provided, all documents will be created with a random ID generated by Firestore (it means that value of `documentConflictResolution` is ignored in that case).<br/><br/>This is useful when you want to update existing documents in Firestore.<br/><br/>*Note:* you can customize the ID for each document independently using the `transformFunction` input field. |
+| `documentConflictResolution` | `enum`: `overwrite`, `merge`, `skip` (*required*) | How to handle conflicts when importing data to Firestore:<br>  - ***overwrite***: replace existing Firestore documents with the same ID.<br>  - ***merge***: merge data from the dataset items with existing Firestore documents.<br>  - ***skip***: documents with existing IDs will be skipped.<br/><br/>⚠️ Please note that the *skip* resolution has really bad performance on large scale and can't use batch writes (it makes request to Firestore for each document separately).  |
+| `transformFunction`          | `string` (javascript, *optional*)                 | Javascript function that transforms each item from the dataset before importing it to Firestore.<br/><br/>The function must return an object (or array of objects) with the `data` key that contains the transformed record and other optional fields. See examples below.                                                                                                                                                                                                               |
+| `batchSize`                  | `number` (*optional*)                             | Number of items to import in a single batch. Lower values are safer but slower, see [Firestore limits](https://firebase.google.com/docs/firestore/quotas) (10 MiB batch write). Please note that *skip* conflict resolution does not use batch writes and will always import one item at a time.<br/>Defaults to `500`.                                                                                                                                                                  |
+
+
+## Transformation Function
+
+The option `transformFunction` input field allows you to transform each dataset item before importing it to Firestore.
+The field accepts a JavaScript function that takes one dataset item as a parameter and returns an object (or array of objects) with the following keys:
+
+- `data` (required): transformed document that will be imported to Firestore.
+- `id` (optional): custom document ID. If not provided, the `idField` input field will be used to resolve document id or if not provided the document will be created with a random ID generated by Firestore.
+- `collection` (optional): custom collection name. If not provided, the `collection` input field will be used.
+- `documentConflictResolution` (optional): custom conflict resolution for the document. If not provided, the `documentConflictResolution` input field will be used.
+
+```javascript
+(item) => {
+    return {
+        data: item,                           // transformed document
+        id: item.id,                          // custom document ID
+        collection: "customCollection",       // custom collection name
+        documentConflictResolution: "merge",  // custom conflict resolution
+    };
 }
 ```
-2. Nested objects
-```
-(data) => {
-  return {
-    title: data.title,
-    "subdocument.field": data.name,  // update single field of subdocument
-    author: data.author              // overwrite whole subdocument
-  };
-}
-```
-3. Field value functions
-```
-(data) => {
-  return {
-    ids: FieldValue.arrayUnion(data.ids),         // add new ids to existing ids array
-    values: FieldValue.arrayRemove(data.values),  // remove new values from existing array
-    count: FieldValue.increment(data.count),      // increment existing count field by provided value
-    old: FieldValue.delete(),                     // removes field (same as unset in mongo
-    vector: FieldValue.VectorValue(data.values),  // create vector from array of numbers
-  };
-}
-```
-4. Data types
-```
-(data) => {
-  return {
-    updatedAt: Timestamp.fromDate(Date.parse(data.date)),          // create Timestamp data type
-    vector: FieldValue.VectorValue(data.values),                   // create vector data type
-    position: GeoPoint(data.lat, dat.lon),                         // create geopoint data type
-    reference: DocumentReference("collection", "referenceDocId"),  // create reference type
-  };
-}
-```
-5. Subcollection
 
-```
-(data) => {
-  // if transform return array, first item is object to insert, second is object with field
-  // `subcollections` that contains `name` of collection and `documents` to insert/update
-  return [
-    {
-      title: item.title,
-      description: item.description,
-      "size.weight": item.size.weight,
-      "size.length": item.size.length,
-    },
-    {
-      subcollections: [
-        {
-          name: "items",
-          documentConflictResolution: "merge",
-          documents: item.items.map((subItem) => ({
-            id: subItem.id || null, // Optional custom ID
-            data: { // document
-              name: subItem.name,
+### Examples
+
+1. **Simple transformation function:**
+
+    The function below increments the value of the `oldField` by 1 and removes the `unused` field from the dataset item.
+    ```javascript
+    (item) => {
+        item.newField = item.oldField + 1;
+        delete item.unused;
+        return { data: item };
+    }
+    ```
+
+2. **Nested objects:**
+
+    The function below transforms the dataset item into a Firestore document with nested objects. It updates the `subdocument.field` field and overwrites the whole `author` sub-document.
+    ```javascript
+    (item) => {
+        return {
+            data: {
+                title: item.title,
+                "subdocument.field": item.name,  // update single field of subdocument
+                author: item.author              // overwrite whole subdocument
             },
-          })),
-        },
-      ],
-    },
-  ]
-};
+        };
+    }
+   ```
+
+3. **Field value functions:**
+
+    The function below demonstrates how to use Firestore `FieldValue` [functions](https://firebase.google.com/docs/reference/node/firebase.firestore.FieldValue).
+It adds new IDs to the existing `ids` array, removes values from the `values` array, increments the `count` field, and deletes the `old` field.
+    ```javascript
+    (item) => {
+        return {
+            data: {
+                ids: FieldValue.arrayUnion(item.ids),         // add new ids to existing ids array
+                values: FieldValue.arrayRemove(item.values),  // remove new values from existing array
+                count: FieldValue.increment(item.count),      // increment existing count field by provided value
+                old: FieldValue.delete(),                     // removes field
+            },
+        };
+    }
+    ```
+
+4. **Data types:**
+
+    The function below demonstrates how to create Firestore data types such as `Timestamp`, `Vector`, `GeoPoint`, and `DocumentReference`.
+    ```javascript
+    (item) => {
+        return {
+            data: {
+                updatedAt: Timestamp.fromDate(Date.parse(item.date)),          // create Timestamp data type
+                vector: FieldValue.VectorValue(item.values),                   // create vector data type
+                position: GeoPoint(item.lat, item.lon),                        // create geopoint data type
+                reference: DocumentReference("collection", "referenceDocId"),  // create reference type
+            },
+        };
+    }
+    ```
+
+5. **Subcollection:**
+
+    The function below demonstrates how to import data to sub-collections.
+    It returns an array where the first item is the main document and other items are documents for sub-collection.
+    ```javascript
+    (item) => {
+        const subDocuments = item.items.map((subItem) => ({
+            id: subItem.id,
+            collection: `records/${item.customId}/items`,
+            documentConflictResolution: "skip",
+            data: {
+                weight: subItem.weight,
+                length: subItem.length,
+                name: subItem.name,
+            },
+        }));
+
+        return [
+            {
+                id: item.customId,
+                collection: "records",
+                documentConflictResolution: "merge",
+                data: {
+                    title: item.title,
+                    description: item.description,
+                },
+            },
+            ...subDocuments,
+        ];
+    }
+    ```
+
+## Output
+
+The Actor outputs statistics about the import to Key-Value store key `Statistics` with the following structure:
+- `imported`: total number of processed Firestore documents (either created, updated or skipped).
+- `skipped`: number of skipped Firestore documents.
+- `overwritten`: number of overwritten Firestore documents.
+- `merged`: number of merged Firestore documents.
+- `created`: number of created Firestore documents (counts written document if `documentConflictResolution` is `skip`).
+- `failed`: number of failed writes to Firestore documents.
+- `itemsProcessed`: total number of processed dataset items (including failed items).
+- `itemsFailed`: number of failed dataset items.
+- `executionTimeMs`: time in milliseconds it took to import the data.
+- `startTime`: timestamp when the import started.
+- `endTime`: timestamp when the import ended.
+
+```json
+{
+  "imported": 59278,
+  "skipped": 0,
+  "overwritten": 0,
+  "merged": 59278,
+  "created": 0,
+  "failed": 0,
+  "itemsProcessed": 1136,
+  "itemsFailed": 0,
+  "executionTimeMs": 19725,
+  "startTime": "2025-02-26T17:56:22.652Z",
+  "endTime": "2025-02-26T17:56:42.377Z"
+}
 ```
 
-I'm not sure with the proposed solution yet, but I want to have options to:
-- return just one object what would be considered as single document
-- return something else (so because of that the array) that would have strictly defined structure to find main document and subcollections
-
-Or maybe better would be to return array of documents where each one defines path (`collection/id/subcollection`) where to insert, so one dataset item can lead to multiple Firestore inserts/updates. But this wouldn't work with auto generated id of the root document.

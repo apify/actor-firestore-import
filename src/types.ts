@@ -20,10 +20,12 @@ export type FirestoreImportInput = {
     datasetId: string;
     /** Collection name in Firestore */
     collection: string;
-    /** How to resolve conflicts when importing documents with existing ids */
-    documentConflictResolution: keyof typeof DOCUMENT_CONFLICT_RESOLUTION;
+    /** Name of Firestore database */
+    databaseName: string;
     /** Field name in dataset to use as document id. If not provided, Firestore would generate one */
     idField?: string;
+    /** How to resolve conflicts when importing documents with existing ids */
+    documentConflictResolution: keyof typeof DOCUMENT_CONFLICT_RESOLUTION;
     /** Transform function to modify dataset item before importing */
     transformFunction?: string;
 };

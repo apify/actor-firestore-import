@@ -2,7 +2,7 @@
 	"actorSpecification": 1,
 	"name": "firestore-import",
 	"title": "Firestore Import",
-	"description": "Actor for importing data to Firestore",
+	"description": "Actor for importing data to Firestore database",
 	"version": "1.0",
 	"buildTag": "latest",
 	"meta": {

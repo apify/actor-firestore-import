@@ -1,6 +1,3 @@
-// noinspection ExceptionCaughtLocallyJS
-
-import { Actor } from 'apify';
 import {
     DOCUMENT_CONFLICT_RESOLUTION,
     FirestoreImportInput,
@@ -13,33 +10,35 @@ import { TRANSFORM_FUNCTION_DEPENDENCIES } from './dependencies.js';
  * Parse input and validate it
  */
 export async function parseInput(input: FirestoreImportInput | null): Promise<FirestoreImportOptions> {
-    try {
-        // Validate input fields
-        if (!input) throw new Error('Input is required');
-        if (!input.serviceAccountKey) throw new Error('Input must contain serviceAccountKey');
-        if (!input.datasetId) throw new Error('Input must contain datasetId');
-        if (!input.collection) throw new Error('Input must contain collection');
-        if (!input.documentConflictResolution) throw new Error('Input must contain documentConflictResolution');
-        if (DOCUMENT_CONFLICT_RESOLUTION[input.documentConflictResolution] === undefined) {
-            throw new Error('Invalid documentConflictResolution');
-        }
-
-        // Parse service account key and transform function
-        const serviceAccount = JSON.parse(input.serviceAccountKey);
-        const transformFunction = await parseTransformFunction(input.transformFunction);
-
-        return {
-            serviceAccount,
-            datasetId: input.datasetId,
-            collection: input.collection,
-            documentConflictResolution: input.documentConflictResolution,
-            idField: input.idField,
-            transformFunction,
-        };
-    } catch (e) {
-        await Actor.exit((e as Error).message, { exitCode: 1 });
-        process.exit(1);
+    // Validate input fields
+    if (!input) throw new Error('Input is required');
+    if (!input.serviceAccountKey) throw new Error('Input must contain serviceAccountKey');
+    if (!input.datasetId) throw new Error('Input must contain datasetId');
+    if (!input.collection) throw new Error('Input must contain collection');
+    if (!input.documentConflictResolution) throw new Error('Input must contain documentConflictResolution');
+    if (DOCUMENT_CONFLICT_RESOLUTION[input.documentConflictResolution] === undefined) {
+        throw new Error('Invalid documentConflictResolution');
     }
+
+    // Parse service account key and transform function
+    let serviceAccount: object;
+    try {
+        serviceAccount = JSON.parse(input.serviceAccountKey);
+    } catch (e) {
+        throw new Error('Invalid serviceAccountKey');
+    }
+
+    const transformFunction = await parseTransformFunction(input.transformFunction);
+
+    return {
+        serviceAccount,
+        datasetId: input.datasetId,
+        collection: input.collection,
+        databaseName: input.databaseName ?? '(default)',
+        idField: input.idField,
+        documentConflictResolution: input.documentConflictResolution,
+        transformFunction,
+    };
 }
 
 /**
@@ -72,4 +71,31 @@ export async function transformDatasetItem(item: Record<string, unknown>, transf
     }
     const result = await transformFunction(item);
     return Array.isArray(result) ? result : [result];
+}
+
+/**
+ * Get Firestore document reference
+ * @param db Firestore instance
+ * @param collection Collection name
+ * @param documentId Document id
+ */
+export function getDocumentReference(db: FirebaseFirestore.Firestore, collection: string, documentId?: string) {
+    const collectionRef = db.collection(collection);
+
+    // If document id is provided, use it, otherwise Firestore will generate one
+    if (documentId) {
+        return collectionRef.doc(documentId.toString());
+    }
+
+    return collectionRef.doc();
+}
+
+/**
+ * Get clean document id as string
+ * @param documentId
+ */
+export function getCleanDocumentId(documentId?: unknown) {
+    return documentId && (typeof documentId === 'string' || typeof documentId === 'number')
+        ? documentId.toString()
+        : undefined;
 }
