@@ -1,4 +1,4 @@
-# Firestore Import Integration
+# Firestore Import
 
 The Firestore Import is Apify integration [Actor](https://docs.apify.com/platform/actors#what-is-an-actor) that import data into [Firebase Firestore](https://firebase.google.com/docs/firestore)
 (NoSQL cloud database build on Google Cloud infrastructure) from [Apify dataset](https://docs.apify.com/platform/storage/dataset).
